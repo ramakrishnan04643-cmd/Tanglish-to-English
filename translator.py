@@ -97,7 +97,7 @@ class TanglishToEnglishPipeline:
                     json={
                         "model": LLM_MODEL,
                         "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 500,
+                        "max_tokens": 1200,  # headroom for long/technical sentences
                         "temperature": 0.1,  # low temperature = consistent, literal output
                     },
                     timeout=60,  # 70B model can be slow under load; give it room
@@ -140,9 +140,17 @@ class TanglishToEnglishPipeline:
 
         message = choices[0].get("message") or {}
         raw_content = message.get("content")
+        finish_reason = choices[0].get("finish_reason")
 
         if not raw_content:
             raise ValueError(f"LLM returned no usable content. Full message: {message}")
+
+        if finish_reason == "length":
+            raise ValueError(
+                "LLM response was cut off before finishing (hit max_tokens limit). "
+                "The sentence may be too long/complex for the current token budget. "
+                f"Raw (truncated) output: {raw_content}"
+            )
 
         raw_content = raw_content.strip()
         # Strip markdown code fences if the model added them despite instructions
